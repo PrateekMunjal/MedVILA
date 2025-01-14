@@ -46,4 +46,6 @@ if __name__ == "__main__":
         mock.patch("transformers.trainer.Trainer.training_step", new=training_step),
     ):
         set_timer()
+
+        breakpoint()
         train()
