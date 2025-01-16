@@ -1547,8 +1547,9 @@ def make_supervised_data_module(
     """Make dataset and collator for supervised fine-tuning.
     This function is originally implemented by the LLaVA team and
     modified by Jason Lu, Haotian Tang and Ligeng Zhu."""
-    datasets_mixture.register_datasets_mixtures()
 
+    datasets_mixture.register_datasets_mixtures()
+    
     from .builder import build_dataset
 
     train_dataset = build_dataset(data_args.data_mixture, data_args, training_args, tokenizer)

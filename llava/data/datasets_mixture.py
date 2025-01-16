@@ -51,6 +51,13 @@ def add_dataset(dataset):
     assert "+" not in dataset.dataset_name, "Dataset name cannot include symbol '+'."
     DATASETS_LEGACY.update({dataset.dataset_name: dataset})
 
-
 def register_datasets_mixtures():
     pass
+
+slake = Dataset(
+    dataset_name="slake",
+    dataset_type="torch",
+    data_path="/data/vlm/preprocessed/slake/slake_train_val_instruct.json",
+    image_path="/data/vlm/original/slake/Slake1.0/imgs",
+)
+add_dataset(slake)

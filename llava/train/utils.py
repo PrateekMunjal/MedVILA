@@ -29,6 +29,7 @@ from transformers import PretrainedConfig, PreTrainedModel
 from transformers.integrations.deepspeed import is_deepspeed_zero3_enabled
 
 from llava.train.sequence_parallel.globals import get_pg_manager, get_ulysses_sp_pg
+from loguru import logger
 
 
 def rprint(*args, **kwargs):
@@ -282,3 +283,16 @@ def sp_loss_rescale(shift_labels, loss):
 #     # dist.all_reduce(global_active_sum, group=get_ulysses_sp_pg())
 #     # loss_weight = num_active_elements / global_active_sum * PROCESS_GROUP_MANAGER.sp_degree
 #     # return loss_weight
+
+
+def need_to_modify_do_sample(generation_config):
+    if generation_config is None:
+            # warnings.warn("generation config is None, skip do sample modification")
+            logger.warning("generation config is None, skip do sample modification")
+            return False
+    if generation_config.do_sample is False:
+        if generation_config.temperature is not None and generation_config.temperature != 1.0:
+            return True
+        if generation_config.top_p is not None and generation_config.top_p != 1.0:
+            return True
+    return False

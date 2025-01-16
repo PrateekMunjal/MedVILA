@@ -1,3 +1,15 @@
 pip install hydra-core
 pip install loguru
-
+pip install deepspeed
+pip install s2wrapper@git+https://github.com/bfshi/scaling_on_scales
+pip install pydantic-2.10.5
+pip install ring_flash_attn==0.1.1
+pip install --upgrade pip setuptools
+pip install https://github.com/Dao-AILab/flash-attention/releases/download/v2.5.8/flash_attn-2.5.8+cu122torch2.3cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+pip install opencv-python-headless
+pip install numpy==1.26.4
+pip install bitsandbytes==0.43.2
+pip install triton==3.1.0
+pip install protobuf==3.20.*
+pip install tyro
+pip install "git+https://github.com/facebookresearch/pytorchvideo.git"
