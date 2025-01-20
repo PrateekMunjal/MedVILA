@@ -474,7 +474,18 @@ def process_image(
         return torch.stack(images)
 
     if data_args.image_aspect_ratio == "resize":
+        # breakpoint()
         image = image.resize((crop_size["width"], crop_size["height"]))
+
+        # ## TODO: Fixing the code for medical images
+        # # Move images from [-1,1] to [0,1]
+        # image_array = np.array(image)
+        # if image_array.min() < 0 or image_array.max() > 1:
+        #     image_array = (image_array + 1)/2
+        #     image_array *= 255
+        #     image = Image.fromarray(image_array.astype(np.uint8))
+ 
+        image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
     if data_args.image_aspect_ratio == "pad":
 
         def expand2square(pil_img, background_color):

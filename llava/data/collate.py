@@ -20,6 +20,7 @@ class DataCollator:
 
     def __call__(self, instances: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
         # Gather everything from the batch
+        # breakpoint()
         input_ids, labels, media = [], [], {name: [] for name in self.tokenizer.media_tokens}
         for instance in instances:
             if isinstance(instance["input_ids"], torch.Tensor):

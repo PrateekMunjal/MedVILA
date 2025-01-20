@@ -7,6 +7,7 @@ from loguru import logger
 
 from llava.data import make_supervised_data_module
 # from helper import make_supervised_data_module
+from llava.data.collate import DataCollator
 
 from llava.model import LlavaLlamaModel, LlavaLlamaConfig
 from llava.train.utils import prepare_config_for_training, vision_resolution_elevation, need_to_modify_do_sample
@@ -123,11 +124,15 @@ def train():
             training_args=training_args,
         )
 
-        # trainer = LLaVATrainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
+        data_module = {
+            'data_collator': DataCollator(tokenizer=tokenizer)
+        }
+
+        trainer = LLaVATrainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
 
         # breakpoint()
 
-        # trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
         # breakpoint()
 
