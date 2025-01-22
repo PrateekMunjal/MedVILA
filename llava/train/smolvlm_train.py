@@ -6,6 +6,23 @@ from datasets import load_dataset
 from loguru import logger
 from transformers import AutoProcessor, AutoModelForVision2Seq
 from trl import SFTConfig, SFTTrainer
+import wandb, time
+import transformers
+
+class CustomSFTTrainer(SFTTrainer):
+    def training_step(self, *args, **kwargs):
+        start_time = time.time() 
+        output = super().training_step(*args, **kwargs)
+        end_time = time.time() 
+
+        # Calculate throughput
+        elapsed_time = end_time - start_time
+        batch_size = self.args.per_device_train_batch_size * self.args._n_gpu
+        throughput = batch_size / elapsed_time
+
+        wandb.log({"throughput_samples_per_second": throughput})
+
+        return output
 
 def collate_fn(minibatch):
 
@@ -72,7 +89,7 @@ def get_training_args():
     training_args = SFTConfig(
         output_dir="smolvlm_output",  # Directory to save the model
         num_train_epochs=10,                     # number of training epochs
-        per_device_train_batch_size=8,          # batch size per device during training
+        per_device_train_batch_size=16,          # batch size per device during training
         gradient_accumulation_steps=1,         # number of steps before performing a backward/update pass
         gradient_checkpointing=False,            # use gradient checkpointing to save memory
         optim="adamw_torch_fused",              # use fused adamw optimizer
@@ -89,7 +106,11 @@ def get_training_args():
         # dataloader_num_workers=16, 
         dataset_text_field="", # need a dummy field for collator
         dataset_kwargs = {"skip_prepare_dataset": True}, # important for collator
-        remove_unused_columns = False                    # necessary else features except label will be removed
+        remove_unused_columns = False,                    # necessary else features except label will be removed
+        logging_dir = "./logs",
+        logging_steps = 10,
+        save_steps = 500,
+        evaluation_strategy = "steps"
     )
 
     return training_args
@@ -104,7 +125,9 @@ def get_model(model_id):
     return model
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":\
+
+    wandb.init(project="trl_sft_smolvlm", name = "h200_smolvlm_run")
 
     device = "cuda"
     
@@ -121,13 +144,23 @@ if __name__ == "__main__":
     dataset_id = "HuggingFaceM4/ChartQA"
     dataset = load_dataset(dataset_id)
 
-    data_loader = DataLoader(dataset["train"], batch_size=4, collate_fn=collate_fn)
-    for batch in data_loader:
-        print(batch)
-        breakpoint()
+    # data_loader = DataLoader(dataset["train"], batch_size=4, collate_fn=collate_fn)
+    # for batch in data_loader:
+    #     print(batch)
+    #     breakpoint()
 
-    # training_args = get_training_args()
-    # vlm_processor = AutoProcessor.from_pretrained("HuggingFaceTB/SmolVLM-Instruct")
+    training_args = get_training_args()
+    vlm_processor = AutoProcessor.from_pretrained("HuggingFaceTB/SmolVLM-Instruct")
+
+    # Initialize custom trainer
+    trainer = CustomSFTTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=dataset["train"],
+        eval_dataset=dataset["test"],
+        data_collator=collate_fn,
+        tokenizer=vlm_processor.tokenizer,
+    )
 
     # trainer = SFTTrainer(
     #     model=model,
@@ -138,8 +171,12 @@ if __name__ == "__main__":
     #     tokenizer=vlm_processor.tokenizer,
     # )
 
-    # trainer.train()
+    trainer.add_callback(transformers.integrations.WandbCallback)
 
-    # logger.info("Saving Model...!!")
-    # trainer.save("./smolvlm_finetuning_checkpoint")
+    trainer.train()
+
+    logger.info("Saving Model...!!")
+    trainer.save("./smolvlm_finetuning_checkpoint")
+
+    wandb.finish()
 

@@ -8,14 +8,16 @@ from loguru import logger
 from llava.data import make_supervised_data_module
 # from helper import make_supervised_data_module
 from llava.data.collate import DataCollator
-
+from torch.utils.data import DataLoader
 from llava.model import LlavaLlamaModel, LlavaLlamaConfig
 from llava.train.utils import prepare_config_for_training, vision_resolution_elevation, need_to_modify_do_sample
 from llava.train.helper import get_nb_trainable_parameters
 from llava import conversation as conversation_lib
 from llava.orig_constanst import DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN
-from llava.train.llava_trainer import LLaVATrainer
+# from llava.train.llava_trainer import LLaVATrainer
+from llava.train.llava_trainer_legacy import LLaVATrainer
 import math
+from llava.train.med_data import SLAKE
 
 def train():
 
@@ -50,6 +52,8 @@ def train():
         model_max_length = training_args.model_max_length,
         cache_dir=training_args.cache_dir
     )
+
+    model = model.to("cuda")
 
     logger.info("Model loaded successfully")
     # logger.info(f"VILA MODEL \n\n {model}")
@@ -116,21 +120,33 @@ def train():
         logger.info(f"Number of patches processed: {num_patches} and number of image tokens after MM Projector: {num_image_tokens}")
 
         data_args.s2_scales = list(map(int, model_args.s2_scales.split(",")))
+        
+        dataset = SLAKE(tokenizer, "/data/vlm/preprocessed/slake/slake_train_val_instruct.json", data_args, "/data/vlm/original/slake/Slake1.0/imgs")
+        
 
-        # breakpoint()
-        data_module = make_supervised_data_module(
-            tokenizer=tokenizer,
-            data_args=data_args,
-            training_args=training_args,
+        collate_fn = DataCollator(tokenizer=tokenizer)
+
+        # data_loader = DataLoader(dataset, batch_size=4, collate_fn=collate_fn)
+        # for batch in data_loader:
+        #     print(batch)
+        #     breakpoint()
+
+        # # breakpoint()
+        # data_module = make_supervised_data_module(
+        #     tokenizer=tokenizer,
+        #     data_args=data_args,
+        #     training_args=training_args,
+        # )
+        data_module = dict(
+            train_dataset=dataset,
+            data_collator=collate_fn,
         )
 
-        data_module = {
-            'data_collator': DataCollator(tokenizer=tokenizer)
-        }
-
+        training_args.sample_lens = [len(dataset)]
+        # trainer = LLaVATrainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
         trainer = LLaVATrainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
 
-        # breakpoint()
+        # # breakpoint()
 
         trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 

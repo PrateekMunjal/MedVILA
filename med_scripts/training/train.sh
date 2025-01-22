@@ -5,7 +5,7 @@
 export PYTHONPATH=/home/prateek/projects/MedVILA
 
 n_node=1
-n_gpus=1
+n_gpus=2
 port_num=25002
 OUTPUT_DIR=/home/prateek/projects/MedVILA/med_results
 MODEL_NAME_OR_PATH=/models_vlm/VILA1.5-3b
@@ -14,7 +14,7 @@ VISION_TOWER=Efficient-Large-Model/paligemma-siglip-so400m-patch14-448
 HEALTHCARE_DS=$(for i in {1..4}; do echo -n slake+; done)
 HEALTHCARE_DS=${HEALTHCARE_DS%+}
 
-batchsize=1
+batchsize=4
 
 #Following M3 codebase on MONAI
 chat_version=v1

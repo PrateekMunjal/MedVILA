@@ -4,6 +4,7 @@ from transformers import PreTrainedTokenizer
 from typing import Any, Dict, Sequence
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
+from datasets import load_dataset
 
 
 from dataclasses import dataclass
@@ -31,16 +32,44 @@ from llava.train.helper import get_nb_trainable_parameters
 from llava import conversation as conversation_lib
 from llava.orig_constanst import DEFAULT_IM_END_TOKEN, DEFAULT_IM_START_TOKEN
 from llava.train.llava_trainer import LLaVATrainer
+from transformers import AutoProcessor
 import math
 
+def get_style(system_message, datapoint):
+    formatted_text_data = {
+        "messages": [
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": system_message}],
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                    },
+                    {
+                        "type": "text",
+                        "text": datapoint["conversations"][0]['value'],
+                    },
+                ],
+            },
+            {
+                "role": "assistant",
+                "content": [{"type": "text", "text": datapoint["conversations"][1]['value']}],
+            },
+        ]
+    }
+
+    return formatted_text_data
+
 class SLAKEDataset(Dataset):
-    def __init__(self, tokenizer: PreTrainedTokenizer, data: Sequence[Dict[str, Any]]):
+    def __init__(self, data: Sequence[Dict[str, Any]]):
         """
         Args:
             tokenizer (PreTrainedTokenizer): Tokenizer used for encoding.
             data (Sequence[Dict[str, Any]]): Sequence of dictionaries containing `input_ids`, `labels`, and other data.
         """
-        self.tokenizer = tokenizer
         self.data = data
 
     def __len__(self):
@@ -50,63 +79,86 @@ class SLAKEDataset(Dataset):
 
         return self.data[idx]
 
+def load_model(hf_id):
+
+    model_cls = LlavaLlamaModel
+    config = LlavaLlamaConfig.from_pretrained(hf_id)
+    config.resume_path = hf_id
+
+    model = model_cls(
+        config=config,
+        attn_implementation="flash_attention_2",
+        model_max_length = 4096,
+        cache_dir=None
+    )
+
+    return model
+
+
+def collate_fn(minibatch):
+
+    hf_id = "/models_vlm/VILA1.5-3b"
+    # hf_id = "Efficient-Large-Model/VILA1.5-40b"
+    llm_processor = AutoProcessor.from_pretrained(f"{hf_id}/llm")
+    system_message = "You are a helpful radiologist assistant"
+
+    for datapoint in minibatch:
+
+        temp = get_style(system_message, datapoint)
+        breakpoint()
+        formatted_text = llm_processor.apply_chat_template(temp["messages"], tokenize=False).strip()
+
+        breakpoint()
+
+
+
 if __name__ == "__main__":
 
-    def just_load_tokenizer():
-        
-        hf_id = "/models_vlm/VILA1.5-3b"
+    data_src = "/data/vlm/preprocessed/slake"
+    data_files = {
+        'train': os.path.join(data_src, "slake_train_val_instruct.json"),
+        'test' : os.path.join(data_src, "slake_test_instruct.json")
+    }    
 
-        model_cls = LlavaLlamaModel
-        config = LlavaLlamaConfig.from_pretrained(hf_id)
-        config.resume_path = hf_id
+    dataset = load_dataset("json", data_files=data_files)
+    train_dataset = dataset['train']
+    test_dataset  = dataset['test'] 
 
-        model = model_cls(
-            config=config,
-            attn_implementation="flash_attention_2",
-            model_max_length = 4096,
-            cache_dir=None
-        )
+    data_loader = DataLoader(train_dataset, batch_size=4, collate_fn=collate_fn)
 
-        return model
-    
-    model = just_load_tokenizer()
-    tokenizer = model.tokenizer
+    for batch in data_loader:
+        print(batch)
+        breakpoint()
 
-    conversation_lib.default_conversation = conversation_lib.conv_templates["v1"]
-    tokenizer.pad_token = tokenizer.unk_token
+
+    # hf_id = "/models_vlm/VILA1.5-3b"
+    # model = load_model(hf_id)
+    # tokenizer = model.tokenizer
+
+    # breakpoint()
+
+    # conversation_lib.default_conversation = conversation_lib.conv_templates["v1"]
+    # tokenizer.pad_token = tokenizer.unk_token
   
-    # Example tokenizer (replace with your specific tokenizer)
-    # tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
     # tokenizer = AutoTokenizer.from_pretrained("/models_vlm/VILA1.5-3b")
 
-    # Example data (replace with your actual data)
-    data = [
-        {
-            "input_ids": torch.tensor([101, 102, 103]),
-            "labels": torch.tensor([1, 2, 3]),
-            "media": {"image": [torch.tensor([1.0, 2.0])]},
-        },
-        # Add more instances as needed
-    ]
+    # breakpoint()
 
-    # Instantiate the custom dataset
-    dataset = CustomDataset(tokenizer=tokenizer, data=data)
+    # # Example data (replace with your actual data)
+    # data = [
+    #     {
+    #         "input_ids": torch.tensor([101, 102, 103]),
+    #         "labels": torch.tensor([1, 2, 3]),
+    #         "media": {"image": [torch.tensor([1.0, 2.0])]},
+    #     },
+    #     # Add more instances as needed
+    # ]
 
-    # Instantiate the DataCollator
-    data_collator = DataCollator(tokenizer=tokenizer)
+    # # Instantiate the custom dataset
+    # dataset = CustomDataset(tokenizer=tokenizer, data=data)
 
-    # Create the DataLoader
-    dataloader = DataLoader(dataset, batch_size=2, collate_fn=data_collator)
+    # # Instantiate the DataCollator
+    # data_collator = DataCollator(tokenizer=tokenizer)
 
-    # Iterate through the DataLoader
-    for batch in dataloader:
-        input_ids = batch["input_ids"]
-        labels = batch["labels"]
-        media = batch["media"]
-        attention_mask = batch["attention_mask"]
-
-        print(input_ids)
-        print(labels)
-        print(media)
-        print(attention_mask)
-        # Your training logic goes here
+    # # Create the DataLoader
+    # dataloader = DataLoader(dataset, batch_size=2, collate_fn=data_collator)

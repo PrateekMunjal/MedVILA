@@ -20,13 +20,13 @@ def __iter__(self):
     return self.batch_sampler.__iter__()
 
 if __name__ == "__main__":
-    with (
-        mock.patch("transformers.image_processing_utils.normalize", new=patched_normalize),
-        mock.patch("accelerate.data_loader.BatchSamplerShard.__len__", new=__len__),
-        mock.patch("accelerate.data_loader.BatchSamplerShard.__iter__", new=__iter__),
-        mock.patch("transformers.trainer.Trainer._save_checkpoint", new=_save_checkpoint),
-        mock.patch("transformers.trainer.Trainer.compute_loss", new=compute_loss),
-        mock.patch("transformers.trainer.Trainer.training_step", new=training_step),
-    ):
+    # with (
+    #     mock.patch("transformers.image_processing_utils.normalize", new=patched_normalize),
+    #     mock.patch("accelerate.data_loader.BatchSamplerShard.__len__", new=__len__),
+    #     mock.patch("accelerate.data_loader.BatchSamplerShard.__iter__", new=__iter__),
+    #     mock.patch("transformers.trainer.Trainer._save_checkpoint", new=_save_checkpoint),
+    #     mock.patch("transformers.trainer.Trainer.compute_loss", new=compute_loss),
+    #     mock.patch("transformers.trainer.Trainer.training_step", new=training_step),
+    # ):
         
-        train()
+    train()
