@@ -474,17 +474,24 @@ def process_image(
         return torch.stack(images)
 
     if data_args.image_aspect_ratio == "resize":
-        # breakpoint()
+
+        
         image = image.resize((crop_size["width"], crop_size["height"]))
 
         # ## TODO: Fixing the code for medical images
         # # Move images from [-1,1] to [0,1]
         # image_array = np.array(image)
-        # if image_array.min() < 0 or image_array.max() > 1:
+        # # for case of -1 range
+        # if image_array.min() < 0:
         #     image_array = (image_array + 1)/2
         #     image_array *= 255
         #     image = Image.fromarray(image_array.astype(np.uint8))
- 
+        # elif image_array.max() > 1:
+        #     # for case when image max is 255
+        #     image_array = image_array / 255.0
+        #     image = Image.fromarray(image_array.astype(np.uint8))
+
+        # image_array = np.array(image)
         image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
     if data_args.image_aspect_ratio == "pad":
 
@@ -509,6 +516,8 @@ def process_image(
         # For Radio, default is central crop
         # For Siglip, default is resize
         # For InternVIT, default is resize
+        # if torch.min(image) < 0.0 or torch.max(image) > 1.0:
+        #     image = (image + 1.0) / 2
         image = processor.preprocess(image, return_tensors="pt")["pixel_values"][0]
     return image
 

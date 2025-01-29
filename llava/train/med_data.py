@@ -43,31 +43,6 @@ class SLAKE(Dataset):
     def __len__(self):
         return len(self.list_data_dict)
     
-    def preprocess_multimodal(self, sources, data_args):
-        is_multimodal = data_args.is_multimodal
-        if not is_multimodal:
-            return sources
-
-        for source in sources:
-            concat_values = "".join([sentence["value"] for sentence in source])
-            for sid, sentence in enumerate(source):
-                # In multimodal conversations, we automatically prepend '<image>' at the start of the first sentence if it doesn't already contain one.
-                if sid == 0 and DEFAULT_IMAGE_TOKEN not in concat_values:
-                    sentence["value"] = f"{DEFAULT_IMAGE_TOKEN}\n" + sentence["value"]
-                if DEFAULT_IMAGE_TOKEN in sentence["value"]:
-                    sentence_chunks = [chunk.strip() for chunk in sentence["value"].split(DEFAULT_IMAGE_TOKEN)]
-                    sentence_chunks = [
-                        chunk + " " if not (chunk.endswith("\n")) else chunk for chunk in sentence_chunks[:-1]
-                    ] + [sentence_chunks[-1]]
-                    sentence["value"] = f"{DEFAULT_IMAGE_TOKEN}\n".join(sentence_chunks).strip()
-                # ensure every DEFAULT_IMAGE_TOKEN is followed by a newline character.
-                # If it has one already, we don't add another one.
-                if DEFAULT_IMAGE_TOKEN in sentence["value"]:
-                    sentence["value"] = sentence["value"].replace(DEFAULT_IMAGE_TOKEN, f"{DEFAULT_IMAGE_TOKEN}\n")
-                    sentence["value"] = sentence["value"].replace(f"{DEFAULT_IMAGE_TOKEN}\n\n", f"{DEFAULT_IMAGE_TOKEN}\n")
-
-        return sources
-
     def __getitem__(self, index):
         
         sources = self.list_data_dict[index]
@@ -81,13 +56,6 @@ class SLAKE(Dataset):
 
             img = self.image_processor(img, return_tensors="pt")["pixel_values"][0]
 
-        ### ORIGINAL CODE
-        # sources = [sources]
-        # sources = self.preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
-        # data_dict = default_collate([
-        #     preprocess_conversation(conversation, self.tokenizer, no_system_prompt=False) for conversation in sources
-        # ])
-
         # MED-VILA CODE
         sources = [self.list_data_dict[index]['conversations']]
         data_dict = default_collate([med_preprocess_conversation(conversation, self.tokenizer) for conversation in sources])
@@ -95,5 +63,12 @@ class SLAKE(Dataset):
         data_dict["image"] = img.unsqueeze(0)
 
         return data_dict
+    
+        ### ORIGINAL CODE
+        # sources = [sources]
+        # sources = self.preprocess_multimodal(copy.deepcopy([e["conversations"] for e in sources]), self.data_args)
+        # data_dict = default_collate([
+        #     preprocess_conversation(conversation, self.tokenizer, no_system_prompt=False) for conversation in sources
+        # ])
 
     

@@ -377,8 +377,11 @@ class LlavaMetaModel(ABC):
             image_features = [rearrange(x, "1 c h w -> (h w) c") for x in image_features]  # list of N * C tensors
             image_features = torch.stack(image_features, dim=0)
         else:
+            breakpoint()
             image_features = self.get_vision_tower()(images)
+            breakpoint()
             image_features = self.get_mm_projector()(image_features)
+            breakpoint()
         return image_features
 
     ## @yunhao: is there a better way to handle function call and attributes for llm?

@@ -5,11 +5,13 @@
 export PYTHONPATH=/home/prateek/projects/MedVILA
 
 n_node=1
-n_gpus=2
+n_gpus=1
 port_num=25002
 OUTPUT_DIR=/home/prateek/projects/MedVILA/med_results
-MODEL_NAME_OR_PATH=/models_vlm/VILA1.5-3b
-VISION_TOWER=Efficient-Large-Model/paligemma-siglip-so400m-patch14-448
+# MODEL_NAME_OR_PATH=/models_vlm/VILA1.5-3b
+MODEL_NAME_OR_PATH=/models_vlm/Llama-3-VILA1.5-8B
+# VISION_TOWER=Efficient-Large-Model/paligemma-siglip-so400m-patch14-448
+VISION_TOWER=/models_vlm/Llama-3-VILA1.5-8B/vision_tower
 
 HEALTHCARE_DS=$(for i in {1..4}; do echo -n slake+; done)
 HEALTHCARE_DS=${HEALTHCARE_DS%+}
@@ -22,7 +24,6 @@ chat_version=v1
 torchrun --nnodes $n_node --nproc_per_node $n_gpus --rdzv_id 42 \
 --rdzv_backend c10d --rdzv_endpoint localhost:$port_num \
 llava/train/med_train.py --output_dir $OUTPUT_DIR \
---deepspeed ./scripts/zero3.json \
 --model_name_or_path $MODEL_NAME_OR_PATH \
 --model_max_length 4096 \
 --vision_tower $VISION_TOWER \
@@ -45,6 +46,7 @@ llava/train/med_train.py --output_dir $OUTPUT_DIR \
 --evaluation_strategy "no" \
 --save_strategy "steps" \
 --save_steps 100 \
+--bf16 True \
 --save_total_limit 1 \
 --learning_rate 2e-5 \
 --weight_decay 0. \
@@ -53,10 +55,12 @@ llava/train/med_train.py --output_dir $OUTPUT_DIR \
 --logging_steps 1 \
 --tf32 True \
 --model_max_length 4096 \
---gradient_checkpointing True \
+--gradient_checkpointing False \
 --dataloader_num_workers 1 \
 --lazy_preprocess True \
 --vflan_no_system_prompt True
+
+# --deepspeed ./scripts/zero2.json \
   
 # --bf16 True
     # --report_to wandb
