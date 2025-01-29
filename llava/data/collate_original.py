@@ -40,6 +40,17 @@ class DataCollator:
 
         batch_size = len(input_ids)
 
+        # Check if the number of media objects matches the number of media tokens
+        # for name in media:
+        #     for k in range(batch_size):
+        #         actual = len(media[name][k])
+        #         expected = (input_ids[k] == self.tokenizer.media_token_ids[name]).sum().item()
+        #         if actual != expected:
+        #             raise ValueError(
+        #                 f"Number mismatch between {name} objects and {name} tokens. "
+        #                 f"There are {expected} {name} tokens but {actual} {name} objects."
+        #             )
+
         # Batchify the inputs
         input_ids = torch.nn.utils.rnn.pad_sequence(
             input_ids,
@@ -59,6 +70,11 @@ class DataCollator:
         for name in media:
             objects = []
             for k in range(batch_size):
+                # actual = len(media[name][k])
+                # expected = (input_ids[k] == self.tokenizer.media_token_ids[name]).sum().item()
+                # if actual > expected:
+                #     logger.warning(f"Truncating the number of {name} objects from {actual} to {expected}")
+                #     media[name][k] = media[name][k][:expected]
                 objects.extend(media[name][k])
             media[name] = objects
 

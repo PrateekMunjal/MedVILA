@@ -35,7 +35,6 @@ DUMMY_CONVERSATION = [
     {"from": "gpt", "value": "answer"},
 ] * 10
 
-
 def tokenize_conversation_legacy(
     messages: Sequence[Dict[str, str]],
     tokenizer: transformers.PreTrainedTokenizer,
@@ -76,6 +75,7 @@ def tokenize_conversation(
     overrides: Optional[Dict[str, str]] = None,
     no_system_prompt: bool = False,
 ) -> torch.Tensor:
+    
     # Normalize the conversation before tokenization
     for message in messages:
         message["value"] = message["value"].strip()

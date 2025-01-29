@@ -7,3 +7,8 @@ __pycache__/
 
 # Ignore egg-info directories
 *.egg-info/
+
+*_output/
+
+med_results/
+wandb/
