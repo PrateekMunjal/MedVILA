@@ -1,0 +1,26 @@
+[2025-02-10 10:25:32,932] [INFO] [real_accelerator.py:110:get_accelerator] Setting ds_accelerator to cuda (auto detect)
+
+ Running tokenize conversation legacy...... 
+
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([100, 255, 2560])
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([100, 257, 2560])
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([100, 256, 2560])
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([100, 260, 2560])
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([100, 259, 2560])
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([100, 260, 2560])
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([100, 262, 2560])
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([100, 264, 2560])
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([100, 262, 2560])
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([100, 259, 2560])
+Warning: No media found for 'video', skipping encoding.
+Input_embeds:  torch.Size([61, 258, 2560])

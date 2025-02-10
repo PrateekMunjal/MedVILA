@@ -797,6 +797,7 @@ class LlavaMetaForCausalLM(ABC):
             
             # 30.1 gb
             generation_kwargs["use_cache"] = False
+            print("Input_embeds: ", inputs_embeds.shape)
             generated_output = self.llm.generate(inputs_embeds=inputs_embeds, attention_mask=attention_mask, **generation_kwargs)
         torch.cuda.empty_cache() # before this it was 45.3 Gb and now 8 Gb
         return generated_output

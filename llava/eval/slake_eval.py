@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from collections import defaultdict
 import json
 from tqdm import tqdm
-import gc
+from time import time
 
 def get_question_answer(ds, index):
     questions = []
@@ -34,6 +34,7 @@ def main():
     parser.add_argument("--fp16", default=False)
     parser.add_argument("--bf16", default=False)
     parser.add_argument("--model_max_length", type=int, default=4096)
+    parser.add_argument("--output_dir", type=str, required=True)
     parser.add_argument("--batch_size", type=int, default=4)
 
     args = parser.parse_args()
@@ -52,7 +53,8 @@ def main():
         config=config,
         attn_implementation="flash_attention_2",
         model_max_length=args.model_max_length,
-        cache_dir="/home/prateek/projects/MedVILA/temp_cache",
+        cache_dir = None,
+        # cache_dir="/home/prateek/projects/MedVILA/temp_cache",
     )
     model.llm.config.torch_dtype = compute_dtype
 
@@ -115,6 +117,8 @@ def main():
     all_answers = []
     all_indexes = []
 
+    start_time = time()
+
     with torch.no_grad():
         for batch in tqdm(data_loader):
             
@@ -125,11 +129,6 @@ def main():
             
             logger.info(f"Inputids shape: {batch['input_ids'].shape}")
 
-            # breakpoint()    
-            # GPU mem noted for batchsize 300 and 1 gpu
-            # 8 Gb
-            breakpoint()
-
             output_ids = model.generate(
                 input_ids=batch["input_ids"],
                 media=batch["media"],
@@ -138,8 +137,7 @@ def main():
             ).cpu()
 
             text_responses = [tokenizer.decode(op_id, skip_special_tokens=True).strip() for op_id in output_ids]
-            # 8 Gb
-            # breakpoint() 
+
             # ground truth
             batch_questions, batch_answers = get_question_answer(dataset, batch["indexes"])
             
@@ -148,10 +146,6 @@ def main():
             all_answers += batch_answers
             all_indexes += batch["indexes"]
 
-            # del batch, output_ids, text_responses, batch_questions, batch_answers
-            torch.cuda.empty_cache()
-
-    
     data_list = []
     for i in range(len(all_indexes)):
         entry = {
@@ -162,12 +156,19 @@ def main():
         }
         data_list.append(entry)
 
-    file_name = "slake_predictions_testset.json"
+    os.makedirs(args.output_dir, exist_ok=True)
+    file_name = os.path.join(args.output_dir, "slake_predictions_testset.json")
 
     with open(file_name, "w", encoding="utf-8") as json_file:
         json.dump(data_list, json_file, indent=4, ensure_ascii=False)
 
-    logger.info(f"JSON file '{file_name}' has been saved successfully!")
+    logger.info(f"JSON file has been saved successfully at path: {file_name}")
+
+    end_time = time()
+
+    logger.info("-"*50)
+    logger.info(f"Time taken to finish infering and writing the predictions: {(end_time - start_time)/60} mins !!")
+    logger.info("-"*50)
 
 if __name__ == "__main__":
     main()

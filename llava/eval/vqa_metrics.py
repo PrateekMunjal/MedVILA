@@ -17,8 +17,6 @@ bert_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 with open("slake_predictions_testset.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
-# Define metric functions
-
 ## 1. Exact Match Accuracy
 def exact_match(pred, gt):
     return int(pred.strip().lower() == gt.strip().lower())

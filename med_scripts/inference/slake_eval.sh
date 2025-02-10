@@ -7,4 +7,5 @@ torchrun --nnodes 1 --nproc_per_node 1 --rdzv_id 42 \
 llava/eval/slake_eval.py \
 --model_path "Efficient-Large-Model/VILA1.5-3b" \
 --conv-mode "v1" \
---model_max_length 4096 --batch_size 300
+--model_max_length 4096 --batch_size 100 \
+--output_dir "med_benchmarks/pretrained/VILA1.5-3b"
