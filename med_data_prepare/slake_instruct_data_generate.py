@@ -27,6 +27,7 @@ def transform_data(input_data):
 
     for idx, item in enumerate(input_data):
         if item["q_lang"] == "en":
+
             transformed_item = {
                 "id": str(idx + 1),
                 "image": str(item["img_name"]),
@@ -35,6 +36,11 @@ def transform_data(input_data):
                     {"from": str("gpt"), "value": str(item["answer"])},
                 ],
             }
+            orig_keys = list(item.keys())
+            for tempkey in orig_keys:
+                if tempkey not in transformed_item:
+                    transformed_item[tempkey] = item[tempkey]
+
             output_data.append(transformed_item)
 
     return output_data

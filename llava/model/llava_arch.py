@@ -377,11 +377,8 @@ class LlavaMetaModel(ABC):
             image_features = [rearrange(x, "1 c h w -> (h w) c") for x in image_features]  # list of N * C tensors
             image_features = torch.stack(image_features, dim=0)
         else:
-            breakpoint()
             image_features = self.get_vision_tower()(images)
-            breakpoint()
             image_features = self.get_mm_projector()(image_features)
-            breakpoint()
         return image_features
 
     ## @yunhao: is there a better way to handle function call and attributes for llm?
@@ -472,10 +469,22 @@ class LlavaMetaForCausalLM(ABC):
     ) -> Dict[str, List[torch.Tensor]]:
         embeds = defaultdict(deque)
         for name in media:
+
+            if name not in media or not media[name]:  # Skip empty media
+                print(f"Warning: No media found for '{name}', skipping encoding.")
+                continue
+
             if self.training:
+                # Handle 1 gpu vs multi gpu run
+                if self.training and dist.is_initialized():
+                    info = [{"shape": tensor.shape, "dtype": tensor.dtype} for tensor in media.get(name, [])]
+                    infos = list(chain(*dist.all_gather(info)))
+                else:
+                    infos = info  # Use local info directly in single-GPU mode
+                
                 # Gather metainfo of media objects from all ranks
-                info = [{"shape": tensor.shape, "dtype": tensor.dtype} for tensor in media.get(name, [])]
-                infos = list(chain(*dist.all_gather(info)))
+                # info = [{"shape": tensor.shape, "dtype": tensor.dtype} for tensor in media.get(name, [])]
+                # infos = list(chain(*dist.all_gather(info)))
 
                 # The entire batch does not contain any media objects of this type.
                 if not infos:
@@ -781,8 +790,17 @@ class LlavaMetaForCausalLM(ABC):
         attention_mask: Optional[torch.LongTensor] = None,
         **generation_kwargs,
     ):
-        inputs_embeds, _, attention_mask = self._embed(input_ids, media, media_config, None, attention_mask)
-        return self.llm.generate(inputs_embeds=inputs_embeds, attention_mask=attention_mask, **generation_kwargs)
+        # Gpu memory for batchsize - 300 and 1 gpu
+        # 8 Gb
+        with torch.no_grad():
+            inputs_embeds, _, attention_mask = self._embed(input_ids, media, media_config, None, attention_mask)
+            
+            # 30.1 gb
+            generation_kwargs["use_cache"] = False
+            print("Input_embeds: ", inputs_embeds.shape)
+            generated_output = self.llm.generate(inputs_embeds=inputs_embeds, attention_mask=attention_mask, **generation_kwargs)
+        torch.cuda.empty_cache() # before this it was 45.3 Gb and now 8 Gb
+        return generated_output
 
     @torch.inference_mode()
     def generate_content(self, prompt: Union[str, List], generation_config: Optional[GenerationConfig] = None) -> str:
@@ -793,36 +811,47 @@ class LlavaMetaForCausalLM(ABC):
 
         # TODO (extract and preprocess should be done together, as the preprocess of image and video can be different, i.e. when dynamic res is used)
         media = extract_media(conversation, self.config)
+        self.config.image_processor = self.vision_tower.image_processor
+
+        for i in range(len(media["image"])):
+            temp_img = (media["image"][i]).copy()
+            h = w = self.config.vision_tower_cfg['image_size']
+            temp_img = temp_img.resize((w, h))
+            temp_img = self.vision_tower.image_processor(temp_img, return_tensors="pt")["pixel_values"][0]
+            media["image"][i] = temp_img.half()
+
+        # images = process_images(media["image"], self.vision_tower.image_processor, self.config).half()
+        # media['image'] = [image for image in images]    
 
         # Process media
         media_config = defaultdict(dict)
-        for name in media:
-            if name == "image":
-                if len(media["image"]) == 1 and self.config.image_aspect_ratio in ["dynamic", "dynamic_s2"]:
-                    self.config.image_processor = self.vision_tower.image_processor
-                    if self.config.image_aspect_ratio == "dynamic":
-                        images = process_image(media["image"][0], self.config, None, enable_dynamic_res=True).half()
-                        conversation[0]["value"] = conversation[0]["value"].replace(
-                            DEFAULT_IMAGE_TOKEN, f"{DEFAULT_IMAGE_TOKEN}\n" * images.shape[0]
-                        )
-                    else:
-                        if type(self.config.s2_scales) is str:
-                            self.config.s2_scales = list(map(int, self.config.s2_scales.split(",")))
-                        images, block_sizes = process_image(
-                            media["image"][0], self.config, None, enable_dynamic_s2=True
-                        )
-                        images = images.half()
-                        media_config[name]["block_sizes"] = [block_sizes]
-                else:
-                    images = process_images(media["image"], self.vision_tower.image_processor, self.config).half()
-                media[name] = [image for image in images]
-            elif name == "video":
-                media[name] = [
-                    process_images(images, self.vision_tower.image_processor, self.config).half()
-                    for images in media[name]
-                ]
-            else:
-                raise ValueError(f"Unsupported media type: {name}")
+        # for name in media:
+        #     if name == "image":
+        #         if len(media["image"]) == 1 and self.config.image_aspect_ratio in ["dynamic", "dynamic_s2"]:
+        #             self.config.image_processor = self.vision_tower.image_processor
+        #             if self.config.image_aspect_ratio == "dynamic":
+        #                 images = process_image(media["image"][0], self.config, None, enable_dynamic_res=True).half()
+        #                 conversation[0]["value"] = conversation[0]["value"].replace(
+        #                     DEFAULT_IMAGE_TOKEN, f"{DEFAULT_IMAGE_TOKEN}\n" * images.shape[0]
+        #                 )
+        #             else:
+        #                 if type(self.config.s2_scales) is str:
+        #                     self.config.s2_scales = list(map(int, self.config.s2_scales.split(",")))
+        #                 images, block_sizes = process_image(
+        #                     media["image"][0], self.config, None, enable_dynamic_s2=True
+        #                 )
+        #                 images = images.half()
+        #                 media_config[name]["block_sizes"] = [block_sizes]
+        #         else:
+        #             images = process_images(media["image"], self.vision_tower.image_processor, self.config).half()
+        #         media[name] = [image for image in images]
+        #     elif name == "video":
+        #         media[name] = [
+        #             process_images(images, self.vision_tower.image_processor, self.config).half()
+        #             for images in media[name]
+        #         ]
+        #     else:
+        #         raise ValueError(f"Unsupported media type: {name}")
 
         # Tokenize the conversation
         input_ids = tokenize_conversation(conversation, self.tokenizer, add_generation_prompt=True).cuda().unsqueeze(0)

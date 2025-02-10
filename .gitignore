@@ -1,14 +1,15 @@
 # Ignore Python bytecode files
 *.pyc
+*.json
 *.pyo
 
 # Ignore __pycache__ directories
-__pycache__/
+**/__pycache__/
 
 # Ignore egg-info directories
 *.egg-info/
 
 *_output/
 
-med_results/
+med_results*/
 wandb/

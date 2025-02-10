@@ -23,7 +23,9 @@ from llava.train.med_data import SLAKE
 from utils import smart_tokenizer_and_embedding_resize
 import transformers
 from llava.train.med_utils import prepare_config_for_training as modify_config_for_training
+from llava.conversation import auto_set_conversation_mode
 
+    
 def safe_save_model_for_hf_trainer(trainer: transformers.Trainer, output_dir: str):
     """Collects the state dict and dump to disk."""
     if trainer.deepspeed:
@@ -44,19 +46,25 @@ def train():
     compute_dtype = torch.float16 if training_args.fp16 else (torch.bfloat16 if training_args.bf16 else torch.float32)
     
     set_seed(training_args.seed)
-    logger.info(f"Set Seed to {training_args.seed}")
+
+    local_rank = int(os.environ.get("LOCAL_RANK", "0"))
+
+    if local_rank == 0: logger.info(f"Set Seed to {training_args.seed}")
 
     #TODO: Check for sequence parallelism here -- llava/train/train.py (search for sp_degree) and llava/train/sequence_parallel/globals.py
 
     # TODO: Add support for quantized model
     assert model_args.quantize_model == "false"
-
-    logger.info(f"Quantization Status: {model_args.quantize_model}")
-    logger.info(f"HF Model: {model_args.model_name_or_path}")
-    logger.info(f"Cache directory: {training_args.cache_dir}")
+    
+    if local_rank == 0:
+        logger.info(f"Quantization Status: {model_args.quantize_model}")
+        logger.info(f"HF Model: {model_args.model_name_or_path}")
+        logger.info(f"Cache directory: {training_args.cache_dir}")
 
     model_cls = LlavaLlamaModel
     resume_from_checkpoint = False
+    
+    auto_set_conversation_mode(model_args.model_name_or_path)
     config = LlavaLlamaConfig.from_pretrained(model_args.model_name_or_path, resume=resume_from_checkpoint)
 
     # prepare_config_for_training(config, model_args, training_args, data_args)
@@ -64,6 +72,11 @@ def train():
 
     #TODO: Change it later with actual path for resuming training
     config.resume_path = model_args.model_name_or_path
+
+    if model_args.version in conversation_lib.conv_templates:
+        conversation_lib.default_conversation = conversation_lib.conv_templates[model_args.version]
+    else:
+        conversation_lib.default_conversation = conversation_lib.conv_templates["vicuna_v1"]
     
     model = model_cls(
         config=config,
@@ -72,8 +85,8 @@ def train():
         cache_dir=training_args.cache_dir
     )
     # model.get_llm().model.embed_tokens = torch.nn.Embedding(32000, 2560, padding_idx=0)
-
-    logger.info("Model loaded successfully")
+    if local_rank == 0:
+        logger.info("Model loaded successfully")
     # logger.info(f"VILA MODEL \n\n {model}")
 
     # Adjust for resolutions other than the vision tower's default (384x384)
@@ -85,9 +98,10 @@ def train():
     if need_to_modify_do_sample(model.llm.generation_config):
         model.llm.generation_config.do_sample = True
 
-    logger.info(f"Training LLM: {config.tune_language_model}")
-    logger.info(f"Training Vision Tower: {config.tune_vision_tower}")
-    logger.info(f"Training MultiModal Projector: {config.tune_mm_projector}")
+    if local_rank == 0:
+        logger.info(f"Training LLM: {config.tune_language_model}")
+        logger.info(f"Training Vision Tower: {config.tune_vision_tower}")
+        logger.info(f"Training MultiModal Projector: {config.tune_mm_projector}")
 
     # TODO: Handle PEFT Methods later
     model.get_llm().requires_grad_(config.tune_language_model)
@@ -106,10 +120,12 @@ def train():
     model = model.to("cuda")
     
     n_train_params, all_params = get_nb_trainable_parameters(model)
-    logger.info(f"{(n_train_params / all_params)*100:.2f}% are trainable (i.e {n_train_params/10**9:.3f} Billions) out of total {all_params/10**9:.3f} Billions")
+    if local_rank == 0:
+        logger.info(f"{(n_train_params / all_params)*100:.2f}% are trainable (i.e {n_train_params/10**9:.3f} Billions) out of total {all_params/10**9:.3f} Billions")
 
     # Check with @Clement to compare with original codebase for tokenizer config
     tokenizer = model.tokenizer
+ 
     if tokenizer.bos_token is None:
         smart_tokenizer_and_embedding_resize(
             special_tokens_dict=dict(bos_token="[BOS]"),
@@ -117,20 +133,23 @@ def train():
             model=model.llm,
         )
 
-    tokenizer.pad_token = tokenizer.unk_token
-    if tokenizer.pad_token is None:
-        smart_tokenizer_and_embedding_resize(
-            special_tokens_dict=dict(pad_token="[PAD]"),
-            tokenizer=tokenizer,
-            model=model.llm,
-        )
+    ############################################################
+    ##  Handling padding token behavior for different models  ## 
+    ############################################################
 
-    if model_args.version in conversation_lib.conv_templates:
-        conversation_lib.default_conversation = conversation_lib.conv_templates[model_args.version]
-    else:
-        conversation_lib.default_conversation = conversation_lib.conv_templates["vicuna_v1"]
+    # - For model_id = "Efficient-Large-Model/VILA1.5-3B":
+    #   - `tokenizer.unk_token` is NOT None, so no need to add a padding token explicitly.
+    # - For model_id = "Efficient-Large-Model/Llama-3-VILA1.5-8B":
+    #   - `tokenizer.unk_token` is None, meaning valid `input_ids` require a padding token.
+    #   - Without a padding token, input sequences might be incorrectly processed.
 
+    # To ensure consistent behavior across models, we explicitly set `pad_token` to None first
+    # tokenizer.pad_token = tokenizer.unk_token
+    tokenizer.pad_token = None  
     
+    if tokenizer.pad_token is None:
+        smart_tokenizer_and_embedding_resize(special_tokens_dict=dict(pad_token="[PAD]"),tokenizer=tokenizer,model=model.llm)
+
     model.llm.pad_token_id = model.tokenizer.pad_token_id
     model.llm.config.tokenizer_padding_side = model.tokenizer.padding_side
     model.llm.config.tokenizer_model_max_length = model.tokenizer.model_max_length
@@ -164,46 +183,51 @@ def train():
         num_image_tokens = math.ceil(num_patches**0.5 / downsample_rate) ** 2
         data_args.num_image_tokens = num_image_tokens
 
-        logger.info(f"Number of patches processed: {num_patches} and number of image tokens after MM Projector: {num_image_tokens}")
-
         data_args.s2_scales = list(map(int, model_args.s2_scales.split(",")))
         
         dataset = SLAKE(tokenizer, "/data/vlm/preprocessed/slake/slake_train_val_instruct.json", data_args, "/data/vlm/original/slake/Slake1.0/imgs")
         
+        if local_rank == 0:
+            logger.info(f"Number of patches processed: {num_patches} and number of image tokens after MM Projector: {num_image_tokens}")
+            logger.info(f"Length of datatset {len(dataset)}")
+        
         collate_fn = DataCollator(tokenizer=tokenizer)
 
-        data_loader = DataLoader(dataset, batch_size=4, collate_fn=collate_fn)
+        # TODO: Remove hardcoded batch szie
+        # data_loader = DataLoader(dataset, batch_size=4, collate_fn=collate_fn)
         model.train()
 
-        for batch in data_loader:
+        # for batch in data_loader:
 
-            batch['input_ids']      = batch['input_ids'].to("cuda")
-            batch['labels']         = batch['labels'].to("cuda")
-            batch['attention_mask'] = batch['attention_mask'].to("cuda")
+        #     breakpoint()
+
+        #     batch['input_ids']      = batch['input_ids'].to("cuda")
+        #     batch['labels']         = batch['labels'].to("cuda")
+        #     batch['attention_mask'] = batch['attention_mask'].to("cuda")
             
-            for i in range(len(batch['media']['image'])):
-                batch['media']['image'][i] = batch['media']['image'][i].to(compute_dtype).to("cuda")
+        #     for i in range(len(batch['media']['image'])):
+        #         batch['media']['image'][i] = batch['media']['image'][i].to(compute_dtype).to("cuda")
             
-            temp_output = model(**batch)
+        #     temp_output = model(**batch)
 
         ## Working code to train VLM with Llava Trainer
 
-        # data_module = dict(
-        #     train_dataset=dataset,
-        #     data_collator=collate_fn,
-        # )
+        data_module = dict(
+            train_dataset=dataset,
+            data_collator=collate_fn,
+        )
 
-        # training_args.sample_lens = [len(dataset)]
-        # trainer = LLaVATrainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
+        training_args.sample_lens = [len(dataset)]
+        trainer = LLaVATrainer(model=model, tokenizer=tokenizer, args=training_args, **data_module)
 
-        # trainer.train(resume_from_checkpoint=resume_from_checkpoint)
+        trainer.train(resume_from_checkpoint=resume_from_checkpoint)
 
-        # trainer.save_state()
+        trainer.save_state()
 
-        # model.llm.config.use_cache = True
-        # model.config.resume_path = model.config._name_or_path = training_args.output_dir
+        model.llm.config.use_cache = True
+        model.config.resume_path = model.config._name_or_path = training_args.output_dir
 
-        # safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
+        safe_save_model_for_hf_trainer(trainer=trainer, output_dir=training_args.output_dir)
 
 if __name__ == "__main__":
     train()

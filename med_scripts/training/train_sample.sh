@@ -6,12 +6,10 @@ export PYTHONPATH=/home/prateek/projects/MedVILA
 
 export CUDA_LAUNCH_BLOCKING=1
 
-n_node=$1
-n_gpus=$2
-port_num=$3
-OUTPUT_DIR=$4
-
-
+n_node=1
+n_gpus=8
+port_num=25008
+OUTPUT_DIR=/home/prateek/projects/MedVILA/med_results_vila1.5_3b
 
 # MODEL_NAME_OR_PATH=/models_vlm/VILA1.5-3b
 # MODEL_NAME_OR_PATH=/models_vlm/Llama-3-VILA1.5-8B
@@ -20,8 +18,7 @@ OUTPUT_DIR=$4
 # MODEL_NAME_OR_PATH=Efficient-Large-Model/Llama-3-VILA1.5-8B
 # MODEL_NAME_OR_PATH=/models_vlm/temp_VILA1.5-3b
 
-MODEL_NAME_OR_PATH=$5
-# Efficient-Large-Model/VILA1.5-3b
+MODEL_NAME_OR_PATH=Efficient-Large-Model/VILA1.5-3b
 # MODEL_NAME_OR_PATH=Efficient-Large-Model/Llama-3-VILA1.5-8B ## works
 VISION_TOWER=$MODEL_NAME_OR_PATH/vision_tower
 
@@ -29,7 +26,7 @@ HEALTHCARE_DS=$(for i in {1..4}; do echo -n slake+; done)
 HEALTHCARE_DS=${HEALTHCARE_DS%+}
 
 batchsize=12
-N_EPOCHS=5 #500
+N_EPOCHS=500
 
 #Following M3 codebase on MONAI
 chat_version=v1
@@ -39,14 +36,14 @@ torchrun --nnodes $n_node --nproc_per_node $n_gpus --rdzv_id 42 \
 llava/train/med_train.py --output_dir $OUTPUT_DIR \
 --model_name_or_path $MODEL_NAME_OR_PATH \
 --model_max_length 4096 \
---vision_tower $MODEL_NAME_OR_PATH/vision_tower \
+--vision_tower $VISION_TOWER \
 --version $chat_version \
 --data_mixture ${HEALTHCARE_DS} \
 --mm_vision_select_feature cls_patch \
 --mm_projector mlp_downsample \
---tune_vision_tower $6 \
---tune_mm_projector $7 \
---tune_language_model $8 \
+--tune_vision_tower True \
+--tune_mm_projector True \
+--tune_language_model True \
 --mm_vision_select_layer -2 \
 --mm_use_im_start_end False \
 --mm_use_im_patch_token False \
@@ -58,7 +55,7 @@ llava/train/med_train.py --output_dir $OUTPUT_DIR \
 --gradient_accumulation_steps 1 \
 --evaluation_strategy "no" \
 --save_strategy "steps" \
---save_steps 400 \
+--save_steps 800 \
 --bf16 True \
 --save_total_limit 1 \
 --learning_rate 2e-5 \

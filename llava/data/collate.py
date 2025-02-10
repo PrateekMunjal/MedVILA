@@ -22,8 +22,10 @@ class DataCollator:
         # Gather everything from the batch
         # breakpoint()
         input_ids, labels, media = [], [], {name: [] for name in self.tokenizer.media_tokens}
+        index_ids = []
         for instance in instances:
             if isinstance(instance["input_ids"], torch.Tensor):
+                index_ids.append(instance["index"])
                 input_ids.append(instance["input_ids"])
                 labels.append(instance["labels"])
                 for name in media:
@@ -31,6 +33,7 @@ class DataCollator:
                     objs = objs if objs is not None else []
                     media[name].append([obj for obj in objs])
             else:
+                index_ids.append(instance["index"])
                 input_ids.extend(instance["input_ids"])
                 labels.extend(instance["labels"])
                 for name in media:
@@ -72,4 +75,5 @@ class DataCollator:
             "media_config": {"image": {"block_sizes": block_sizes}, "video": {}},
             "labels": labels,
             "attention_mask": attention_mask,
+            "indexes": index_ids,
         }
