@@ -6,6 +6,7 @@ import os
 HfFolder.save_token(os.environ["HF_API"])
 
 
-model_id = "Efficient-Large-Model/Llama-3-VILA1.5-8B"
+# model_id = "Efficient-Large-Model/Llama-3-VILA1.5-8B"
+model_id = "Efficient-Large-Model/VILA1.5-3b"
 
-snapshot_download(repo_id=model_id, local_dir='/models_vlm/Llama-3-VILA1.5-8B')
+snapshot_download(repo_id=model_id, local_dir=f'/models_vlm/temp_{os.path.basename(model_id)}')

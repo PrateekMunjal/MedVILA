@@ -81,6 +81,7 @@ def tokenize_conversation(
         message["value"] = message["value"].strip()
 
     if conversation_lib.default_conversation.sep_style != conversation_lib.SeparatorStyle.AUTO:
+        print("\n Running tokenize conversation legacy...... \n")
         return tokenize_conversation_legacy(
             messages,
             tokenizer,
@@ -107,6 +108,7 @@ def tokenize_conversation(
     if no_system_prompt:
         conversation = [{"role": "system", "content": None}] + conversation
 
+    # breakpoint()
     text = tokenizer.apply_chat_template(
         conversation,
         add_generation_prompt=add_generation_prompt,
